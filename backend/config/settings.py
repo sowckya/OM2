@@ -55,6 +55,10 @@ INSTALLED_APPS = [
     'django.contrib.messages',
     'django.contrib.staticfiles',
     'rest_framework',
+    'users',
+    'x_accounts',
+    'content',
+    'distribution',
 ]
 
 MIDDLEWARE = [
@@ -140,7 +144,81 @@ USE_TZ = True
 
 STATIC_URL = 'static/'
 
+# Custom user model (users.User). Must be set before the first migration.
+AUTH_USER_MODEL = 'users.User'
+
 # Default primary key field type
 # https://docs.djangoproject.com/en/5.2/ref/settings/#default-auto-field
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+
+
+# Django REST Framework: session auth only (no tokens), authenticated by default.
+# AI provider for content generation (content.providers.registry): 'mock' fills templates
+# from Content DNA without calling any API; 'gemini' calls Google Gemini.
+CONTENT_AI_PROVIDER = os.environ.get('CONTENT_AI_PROVIDER', 'mock')
+
+
+def env_int(name, default, minimum, maximum):
+    raw = os.environ.get(name, '').strip()
+    try:
+        value = int(raw) if raw else default
+    except ValueError:
+        raise ImproperlyConfigured(f'{name} must be a whole number.') from None
+    if not minimum <= value <= maximum:
+        raise ImproperlyConfigured(f'{name} must be between {minimum} and {maximum}.')
+    return value
+
+
+# Google Gemini (content.providers.gemini). The key is a secret: set it only in backend/.env.
+# Usage limits and billing come from the Google project that owns the key, not from OM2.
+GEMINI_API_KEY = os.environ.get('GEMINI_API_KEY', '')
+
+# Optional TinyURL API token for short X links in WhatsApp messages. Blank: full links.
+TINYURL_API_TOKEN = os.environ.get('TINYURL_API_TOKEN', '').strip()
+TINYURL_TIMEOUT_SECONDS = env_int('TINYURL_TIMEOUT_SECONDS', 4, 1, 15)
+GEMINI_MODEL = os.environ.get('GEMINI_MODEL', '').strip() or 'gemini-3.5-flash-lite'
+GEMINI_TIMEOUT_SECONDS = env_int('GEMINI_TIMEOUT_SECONDS', 60, 5, 300)
+# Retries for temporary server errors (5xx) and network failures. Rate limits are never retried.
+GEMINI_MAX_RETRIES = env_int('GEMINI_MAX_RETRIES', 1, 0, 3)
+GEMINI_MAX_OUTPUT_TOKENS = env_int('GEMINI_MAX_OUTPUT_TOKENS', 8192, 512, 65536)
+# How much the model reasons before writing: minimal (default), low, medium, high, or
+# "default" to send nothing (Gemini 3 then uses high, which is much slower). If a model
+# rejects minimal, OM2 falls back to low, then to the model default.
+GEMINI_THINKING_LEVEL = os.environ.get('GEMINI_THINKING_LEVEL', '').strip().lower() or 'minimal'
+# USD per million tokens, for cost estimates only (free-tier usage is not billed).
+GEMINI_INPUT_USD_PER_MILLION = os.environ.get('GEMINI_INPUT_USD_PER_MILLION', '').strip() or '0.30'
+GEMINI_OUTPUT_USD_PER_MILLION = os.environ.get('GEMINI_OUTPUT_USD_PER_MILLION', '').strip() or '2.50'
+
+# Tests always use the mock provider and can't reach the network, whatever .env says.
+TEST_RUNNER = 'config.test_runner.OM2TestRunner'
+
+# Timing and token diagnostics for content generation (never prompts, post text or keys)
+# are logged by the "content" loggers at INFO. Shown on the console while DEBUG is on.
+LOGGING = {
+    'version': 1,
+    'disable_existing_loggers': False,
+    'filters': {'debug_only': {'()': 'django.utils.log.RequireDebugTrue'}},
+    'handlers': {'console': {'class': 'logging.StreamHandler', 'filters': ['debug_only']}},
+    'loggers': {
+        'content': {'handlers': ['console'], 'level': os.environ.get('CONTENT_LOG_LEVEL', 'INFO').upper(), 'propagate': True},
+    },
+}
+
+REST_FRAMEWORK = {
+    'DEFAULT_AUTHENTICATION_CLASSES': ['users.authentication.SessionAuthentication'],
+    'DEFAULT_PERMISSION_CLASSES': ['rest_framework.permissions.IsAuthenticated'],
+    'DEFAULT_THROTTLE_RATES': {'login': '10/minute'},
+}
+
+# Session and CSRF cookies. The session cookie is HttpOnly (Django default); the CSRF
+# cookie stays readable so the frontend can send it back in the X-CSRFToken header.
+SESSION_COOKIE_SAMESITE = 'Lax'
+CSRF_COOKIE_SAMESITE = 'Lax'
+SESSION_COOKIE_SECURE = not DEBUG
+CSRF_COOKIE_SECURE = not DEBUG
+
+# Origins allowed to make unsafe requests, e.g. the Vite dev server (comma-separated).
+CSRF_TRUSTED_ORIGINS = [
+    o.strip() for o in os.environ.get('DJANGO_CSRF_TRUSTED_ORIGINS', '').split(',') if o.strip()
+]

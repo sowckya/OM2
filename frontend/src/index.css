@@ -1,1 +1,36 @@
 @import "tailwindcss";
+
+@theme {
+  /* OM2 admin palette: midnight navy, warm cream, muted brass. */
+  --color-navy-700: #2c3d57;
+  --color-navy-800: #22324a;
+  --color-navy-900: #192638;
+  --color-navy-950: #111b29;
+  --color-cream: #f8f4ea;
+  --color-ivory: #fffcf6;
+  --color-sand: #f2eada;
+  --color-line: #e8e2d6;
+  --color-ink: #192638;
+  --color-muted: #62666c;
+  --color-brass: #a38a5c;
+  --color-brass-hover: #b39a6b;
+  --color-brass-dark: #7a6334;
+  --color-brass-light: #e2cfa6;
+
+  --font-sans: Inter, "Noto Sans Telugu", ui-sans-serif, system-ui, sans-serif;
+  --font-display: Newsreader, Georgia, "Noto Sans Telugu", serif;
+}
+
+/* Scrollable but without a visible scrollbar (sidebar rail). */
+@utility scrollbar-none {
+  scrollbar-width: none;
+  &::-webkit-scrollbar {
+    display: none;
+  }
+}
+
+/* Thin, warm scrollbar for scrolling lists inside panels. */
+@utility scrollbar-soft {
+  scrollbar-width: thin;
+  scrollbar-color: #d6ccb8 transparent;
+}
